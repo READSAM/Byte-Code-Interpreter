@@ -21,7 +21,7 @@ public:
         PRIMARY
     };
 
-    using ParseFn = void (Compiler::*)();
+    using ParseFn = void (Compiler::*)(bool canAssign);
 
     struct ParseRule {
         ParseFn prefix;
@@ -35,6 +35,8 @@ public:
 private:
     void advance();
     void consume(TokenType type, const char* message);
+    bool check(TokenType type);
+    bool match(TokenType type);
     void errorAtCurrent(const char* message);
     void error(const char* message);
     void errorAt(const Token& token, const char* message);
@@ -50,19 +52,35 @@ private:
     void endCompiler();
 
     void expression();
+    void statement();
+    void declaration();
+    void varDeclaration();
+    void expressionStatement();
+    void printStatement();
+    void synchronize();
+    
     void parsePrecedence(Precedence precedence);
-    void grouping();
-    void unary();
-    void binary();
-    void number();
-    void string();
-    void literal();
+    uint8_t identifierConstant(Token* name);
+    uint8_t parseVariable(const char* errorMessage);
+    void defineVariable(uint8_t global);
+
+    void grouping(bool canAssign);
+    void unary(bool canAssign);
+    void binary(bool canAssign);
+    void number(bool canAssign);
+    void string(bool canAssign);
+    void literal(bool canAssign);
+    void variable(bool canAssign);
+    void namedVariable(Token name, bool canAssign);
 
     const ParseRule& getRule(TokenType type) const;
 
+    Scanner scanner;
     Chunk* compilingChunk{nullptr};
     Token current{};
     Token previous{};
     bool hadError{false};
     bool panicMode{false};
 };
+
+bool compile(std::string_view source, Chunk& chunk);

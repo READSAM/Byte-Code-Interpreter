@@ -4,13 +4,13 @@
 
 static Scanner globalScanner;
 
-void initScanner(const char* source) {
-    globalScanner.init(source);
-}
+// void initScanner(const char* source) {
+//     globalScanner.init(source);
+// }
 
-Token scanToken() {
-    return globalScanner.scanToken();
-}
+// Token scanToken() {
+//     return globalScanner.scanToken();
+// }
 
 Scanner::Scanner(const char* source) {
     init(source);

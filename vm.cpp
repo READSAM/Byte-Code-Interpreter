@@ -6,16 +6,19 @@
 #include "compiler.hpp"
 #include "debug.hpp"
 #include "memory.hpp"
+#include "table.hpp"
 
 VM* VM::instance = nullptr;
 
 VM::VM() {
     instance = this;
+    globals.init();
     strings.init();
     resetStack();
 }
 
 VM::~VM() {
+    globals.free();
     strings.free();
     freeObjects();
     instance = nullptr;
@@ -81,6 +84,10 @@ InterpretResult VM::run() {
         return chunk->getConstants()[readByte()];
     };
 
+    auto readString=[this,&readConstant]()-> ObjString*{ 
+        return AS_STRING(readConstant());
+        };
+
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
         std::printf("          ");
@@ -103,7 +110,36 @@ InterpretResult VM::run() {
             case OpCode::OP_NIL:   push(NIL_VAL()); break;
             case OpCode::OP_TRUE:  push(BOOL_VAL(true)); break;
             case OpCode::OP_FALSE: push(BOOL_VAL(false)); break;
+            case OpCode::OP_POP: pop(); break;
+            case OpCode::OP_GET_GLOBAL:{
+                ObjString* name=readString();
+                Value value;
+                if(!globals.get(name,&value))
+                {
+                    runtimeError("Undefined variable '%s'.",name->chars);
+                    return InterpretResult::RUNTIME_ERROR;
+                }
 
+                push(value);
+                break;
+            }
+            case OpCode:: OP_DEFINE_GLOBAL:{
+                ObjString* name= readString();
+                globals.set(name,peek(0));
+                pop();
+                break;
+            }
+            case OpCode::OP_SET_GLOBAL:{
+                ObjString* name= readString();
+                if(globals.set(name,peek(0)))
+                {
+                    globals.remove(name);
+                    runtimeError("Undefine variable '%s' .",name->chars);
+                    return InterpretResult::RUNTIME_ERROR;
+                }
+
+                break;
+            }
             case OpCode::OP_EQUAL: {
                 Value b = pop();
                 Value a = pop();
@@ -183,9 +219,12 @@ InterpretResult VM::run() {
                 }
                 push(NUMBER_VAL(-AS_NUMBER(pop())));
                 break;
-            case OpCode::OP_RETURN: {
+            case OpCode::OP_PRINT:
                 printValue(pop());
-                std::printf("\n");
+                printf("\n");
+                break;
+            case OpCode::OP_RETURN: {
+                //exit 
                 return InterpretResult::OK;
             }
             default:

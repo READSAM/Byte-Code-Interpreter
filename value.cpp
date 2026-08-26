@@ -34,6 +34,8 @@ bool valuesEqual(Value a, Value b) noexcept {
         case ValueType::VAL_OBJ:
             return AS_OBJ(a)==AS_OBJ(b);
 }
+
+return false;
 }
 bool Value::operator==(const Value& other) const noexcept {
     return valuesEqual(*this, other);

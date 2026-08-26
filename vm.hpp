@@ -48,6 +48,7 @@ public:
     std::array<Value, STACK_MAX> stack{};
     Value* stackTop = nullptr;
     Obj* objects = nullptr;
+    Table globals;
     Table strings;
 
     void resetStack();

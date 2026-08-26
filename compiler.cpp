@@ -38,7 +38,7 @@ void Compiler::advance() {
     previous = current;
 
     for (;;) {
-        current = scanToken();
+        current = scanner.scanToken();
         if (current.type != TokenType::TOKEN_ERROR) break;
 
         errorAtCurrent(current.start);
@@ -51,6 +51,16 @@ void Compiler::consume(TokenType type, const char* message) {
         return;
     }
     errorAtCurrent(message);
+}
+
+bool Compiler::check(TokenType type) {
+  return current.type == type;
+}
+
+bool Compiler::match(TokenType type) {
+  if (!check(type)) return false;
+  advance();
+  return true;
 }
 
 void Compiler::emitByte(uint8_t byte) {
@@ -102,7 +112,7 @@ void Compiler::endCompiler() {
 #endif
 }
 
-void Compiler::binary() {
+void Compiler::binary(bool canAssign) {
     TokenType operatorType = previous.type;
     const ParseRule& rule = getRule(operatorType);
     parsePrecedence(static_cast<Precedence>(static_cast<uint8_t>(rule.precedence) + 1));
@@ -122,7 +132,7 @@ void Compiler::binary() {
     }
 }
 
-void Compiler::literal() {
+void Compiler::literal(bool canAssign) {
     switch (previous.type) {
         case TokenType::TOKEN_FALSE: emitByte(OpCode::OP_FALSE); break;
         case TokenType::TOKEN_NIL:   emitByte(OpCode::OP_NIL); break;
@@ -131,21 +141,39 @@ void Compiler::literal() {
     }
 }
 
-void Compiler::grouping() {
+void Compiler::grouping(bool canAssign) {
     expression();
     consume(TokenType::TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
-void Compiler::number() {
+void Compiler::number(bool canAssign) {
     double value = std::strtod(previous.start, nullptr);
     emitConstant(NUMBER_VAL(value));
 }
 
-void Compiler::string() {
+void Compiler::string(bool canAssign) {
     emitConstant(OBJ_VAL(copyString(previous.start + 1, static_cast<int>(previous.length - 2))));
 }
 
-void Compiler::unary() {
+void Compiler::namedVariable(Token name,bool canAssign)
+{
+    uint8_t arg= identifierConstant(&name);
+
+    if(canAssign && match(TokenType::TOKEN_EQUAL))
+    {
+        expression();
+        emitBytes(OpCode::OP_SET_GLOBAL, arg);
+    }
+    else{
+    emitBytes(OpCode:: OP_GET_GLOBAL, arg);
+    }
+}
+
+void Compiler::variable(bool canAssign){
+    namedVariable(previous,canAssign);
+}
+
+void Compiler::unary(bool canAssign) {
     TokenType operatorType = previous.type;
 
     parsePrecedence(Precedence::UNARY);
@@ -184,7 +212,7 @@ const Compiler::ParseRule& Compiler::getRule(TokenType type) const {
         set(TokenType::TOKEN_GREATER_EQUAL, nullptr,             &Compiler::binary,  Precedence::COMPARISON);
         set(TokenType::TOKEN_LESS,          nullptr,             &Compiler::binary,  Precedence::COMPARISON);
         set(TokenType::TOKEN_LESS_EQUAL,    nullptr,             &Compiler::binary,  Precedence::COMPARISON);
-        set(TokenType::TOKEN_IDENTIFIER,    nullptr,             nullptr,            Precedence::NONE);
+        set(TokenType::TOKEN_IDENTIFIER,    &Compiler::variable, nullptr,            Precedence::NONE);
         set(TokenType::TOKEN_STRING,        &Compiler::string,   nullptr,            Precedence::NONE);
         set(TokenType::TOKEN_NUMBER,        &Compiler::number,   nullptr,            Precedence::NONE);
         set(TokenType::TOKEN_AND,           nullptr,             nullptr,            Precedence::NONE);
@@ -219,36 +247,139 @@ void Compiler::parsePrecedence(Precedence precedence) {
         error("Expect expression.");
         return;
     }
-
-    (this->*prefixRule)();
+    
+    bool canAssign = precedence <= Precedence::ASSIGNMENT;
+    (this->*prefixRule)(canAssign);
 
     while (precedence <= getRule(current.type).precedence) {
         advance();
         ParseFn infixRule = getRule(previous.type).infix;
-        (this->*infixRule)();
+
+        (this->*infixRule)(canAssign);
     }
+
+    if(canAssign && match(TokenType::TOKEN_EQUAL))
+    {
+        error("Invalid assignment target.");
+    }
+}
+
+uint8_t Compiler::identifierConstant(Token* name)
+{
+    return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
+}
+
+uint8_t Compiler::parseVariable(const char* errorMessage)
+{
+     consume(TokenType::TOKEN_IDENTIFIER, errorMessage);
+     return identifierConstant(&previous);
+}
+
+void Compiler::defineVariable(uint8_t global)
+{
+    emitBytes(OpCode::OP_DEFINE_GLOBAL, global);
 }
 
 void Compiler::expression() {
     parsePrecedence(Precedence::ASSIGNMENT);
 }
 
+void Compiler::varDeclaration()
+{
+    uint8_t global= parseVariable("Expect variable name.");
+
+    if(match(TokenType:: TOKEN_EQUAL))
+    {
+        expression();
+    }
+     else {
+        emitByte(OpCode::OP_NIL);
+    }
+    consume(TokenType::TOKEN_SEMICOLON,"Expect ';' after variable declaration");
+
+    defineVariable(global);
+}
+void Compiler::expressionStatement()
+{
+    expression();
+    consume(TokenType::TOKEN_SEMICOLON, "Expect ';' after expression.");
+    emitByte(OpCode::OP_POP);
+}
+
+void Compiler::printStatement() {
+  expression();
+  consume(TokenType::TOKEN_SEMICOLON, "Expect ';' after value.");
+  emitByte(OpCode::OP_PRINT);
+}
+
+void Compiler::synchronize()
+{
+    panicMode= false;
+
+    while(current.type != TokenType::TOKEN_EOF)
+    {
+        if(previous.type == TokenType:: TOKEN_SEMICOLON) return;
+
+        switch(current.type)
+        {
+            case TokenType::TOKEN_CLASS:
+            case TokenType::TOKEN_FUN:
+            case TokenType::TOKEN_VAR:
+            case TokenType::TOKEN_FOR:
+            case TokenType::TOKEN_IF:
+            case TokenType::TOKEN_WHILE:
+            case TokenType::TOKEN_PRINT:
+            case TokenType::TOKEN_RETURN:
+                return;
+
+            default:
+                ; // Do nothing.
+        }
+
+        advance();
+
+    }
+}
+
+void Compiler::declaration()
+{
+    if(match(TokenType::TOKEN_VAR))
+    {
+        varDeclaration();
+    }
+    else {
+        statement();
+    }
+
+
+    if(panicMode) synchronize();
+}
+
+void Compiler::statement()
+{
+    if(match(TokenType::TOKEN_PRINT))
+    {
+        printStatement();
+    }
+    else expressionStatement();
+}
+
 bool Compiler::compile(std::string_view source, Chunk& chunk) {
-    initScanner(source.data());
+
+    scanner.init(source.data());
     compilingChunk = &chunk;
 
     hadError = false;
     panicMode = false;
 
     advance();
-    expression();
-    consume(TokenType::TOKEN_EOF, "Expect end of expression.");
+
+    while(!match(TokenType:: TOKEN_EOF))
+    {
+        declaration();
+    }
+
     endCompiler();
 
     return !hadError;
-}
-
-bool compile(std::string_view source, Chunk& chunk) {
-    Compiler compiler;
-    return compiler.compile(source, chunk);
 }

@@ -58,7 +58,7 @@ ObjString* copyString(const char* chars, int length) {
     ObjString* interned = VM::getInstance().strings.findString(chars, length, hash);
 
     if(interned !=NULL){
-        freeArray(chars, length+1);
+        freeArray(const_cast<char*>(chars), length+1);
         return interned;
     }
     return allocateString(chars, length,hash);
