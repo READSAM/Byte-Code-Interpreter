@@ -1,8 +1,7 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
 #include <string_view>
+
 #include "common.hpp"
 
 enum class TokenType : uint8_t {
@@ -69,7 +68,3 @@ private:
     Token number();
     Token string();
 };
-
-//global scanner state wrappers for backwards compatibility
-void initScanner(const char* source);
-Token scanToken();

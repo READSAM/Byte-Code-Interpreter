@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <string_view>
 #include "common.hpp"
 #include "value.hpp"
@@ -18,6 +17,7 @@ struct ObjString : public Obj {
     int length{0};
     uint32_t hash{0};
     char chars[1]{'\0'};
+    
 };
 
 ObjString* takeString(char* chars, int length);

@@ -1,12 +1,14 @@
 #pragma once
 
 #include <array>
-#include <cstddef>
-#include <cstdint>
+
 #include <string_view>
+
+#include "common.hpp"
 #include "chunk.hpp"
 #include "object.hpp"
 #include "value.hpp"
+#include "table.hpp"
 
 enum class InterpretResult : uint8_t {
     OK,
@@ -37,7 +39,7 @@ public:
     Obj* getObjects() const noexcept { return objects; }
     void setObjects(Obj* objectList) noexcept { objects = objectList; }
 
-private:
+public:
     static VM* instance;
 
     Chunk* chunk = nullptr;
@@ -46,6 +48,7 @@ private:
     std::array<Value, STACK_MAX> stack{};
     Value* stackTop = nullptr;
     Obj* objects = nullptr;
+    Table strings;
 
     void resetStack();
     void runtimeError(const char* format, ...);
@@ -54,10 +57,3 @@ private:
     void concatenate();
     InterpretResult run();
 };
-
-// global backward-compatible wrappers
-void initVM();
-void freeVM();
-InterpretResult interpret(const char* source);
-void push(Value value);
-Value pop();

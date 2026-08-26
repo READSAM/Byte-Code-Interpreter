@@ -11,10 +11,12 @@ VM* VM::instance = nullptr;
 
 VM::VM() {
     instance = this;
+    strings.init();
     resetStack();
 }
 
 VM::~VM() {
+    strings.free();
     freeObjects();
     instance = nullptr;
 }
@@ -205,9 +207,6 @@ InterpretResult VM::interpret(std::string_view source) {
 
     return run();
 }
-
-void initVM() {}
-void freeVM() { freeObjects(); }
 
 InterpretResult interpret(const char* source) {
     return VM::getInstance().interpret(source);

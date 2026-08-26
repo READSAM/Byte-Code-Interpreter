@@ -2,8 +2,10 @@
 
 #include <cstdio>
 #include <cstring>
+
 #include "memory.hpp"
 #include "vm.hpp"
+#include "table.hpp"
 
 static Obj* allocateObject(size_t size, ObjType type) {
     auto* object = static_cast<Obj*>(reallocate(nullptr, 0, size));
@@ -16,7 +18,7 @@ static Obj* allocateObject(size_t size, ObjType type) {
     return object;
 }
 
-static ObjString* allocateString(const char* chars, int length) {
+static ObjString* allocateString(const char* chars, int length,uint32_t hash) {
 
     // total allocation size = struct size + string length(including'\0')
     // we subtract 1 because sizeof(ObjString) already includes chars[1].
@@ -27,22 +29,41 @@ static ObjString* allocateString(const char* chars, int length) {
     
     std::memcpy(string->chars, chars, length);
     string->chars[length] = '\0';
+    string->hash=hash;
+    VM::getInstance().strings.set( string, NIL_VAL());
 
     return string;
 }
 
+static uint32_t hashString(const char* key, int length)
+{
+    uint32_t hash=2166136261u;
+    for(int i=0;i<length;i++)
+    {
+        hash^=(uint8_t)key[i];
+        hash*=16777619;
+    }
+
+    return hash;
+}
+
 ObjString* takeString(char* chars, int length) {
     // in single-block design, takeString copies into the combined ObjString block
-    return allocateString(chars, length);
+    uint32_t hash=hashString(chars,length);
+    return allocateString(chars, length,hash);
 }
 
 ObjString* copyString(const char* chars, int length) {
-    return allocateString(chars, length);
+    uint32_t hash=hashString(chars,length);
+    ObjString* interned = VM::getInstance().strings.findString(chars, length, hash);
+
+    if(interned !=NULL){
+        freeArray(chars, length+1);
+        return interned;
+    }
+    return allocateString(chars, length,hash);
 }
 
-ObjString* copyString(std::string_view str) {
-    return allocateString(str.data(), static_cast<int>(str.length()));
-}
 
 void printObject(Value value) {
     switch (OBJ_TYPE(value)) {

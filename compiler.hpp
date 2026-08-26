@@ -66,5 +66,3 @@ private:
     bool hadError{false};
     bool panicMode{false};
 };
-
-bool compile(std::string_view source, Chunk& chunk);

@@ -31,17 +31,10 @@ bool valuesEqual(Value a, Value b) noexcept {
             return true;
         case ValueType::VAL_NUMBER:
             return AS_NUMBER(a) == AS_NUMBER(b);
-        case ValueType::VAL_OBJ: {
-            ObjString* aString = AS_STRING(a);
-            ObjString* bString = AS_STRING(b);
-            return aString->length == bString->length &&
-                   std::memcmp(aString->chars, bString->chars, aString->length) == 0;
-        }
-        default:
-            return false;
-    }
+        case ValueType::VAL_OBJ:
+            return AS_OBJ(a)==AS_OBJ(b);
 }
-
+}
 bool Value::operator==(const Value& other) const noexcept {
     return valuesEqual(*this, other);
 }
